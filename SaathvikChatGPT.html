@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SaathvikChatGPT</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@11.8.0/lib/browser/math.js"></script>
+<style>
+:root{
+  --accent:#10a37f;
+  --bg:#f7f7f8;
+  --card:#fff;
+  --muted:#666;
+  --sidebar:#fff;
+}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+body{
+  background: var(--bg);
+  display:flex;
+}
+
+/* Sidebar */
+.sidebar{
+  width:200px;
+  background: var(--sidebar);
+  display:flex;
+  flex-direction:column;
+  padding:20px 10px;
+  box-shadow: 2px 0 12px rgba(16,16,24,0.08);
+}
+.sidebar button{
+  background:transparent;
+  border:0;
+  font-size:16px;
+  font-weight:600;
+  color:#343541;
+  text-align:left;
+  padding:10px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-bottom:8px;
+  transition: background 0.2s,color 0.2s;
+}
+.sidebar button:hover{
+  background:var(--accent);
+  color:white;
+}
+
+/* Main content */
+.main{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:30px;
+  min-height:100vh;
+}
+
+/* Header animations */
+@keyframes popUp {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  80%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+@keyframes floatHeader {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0px); }
+}
+header{
+  font-size:28px;
+  font-weight:700;
+  margin-bottom:40px; /* header slightly up */
+  animation: popUp 0.8s ease-out forwards, floatHeader 2.5s ease-in-out infinite;
+  text-align:center;
+}
+
+/* Search card */
+.search-card{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  background:var(--card);
+  padding:12px 14px;
+  border-radius:30px;
+  box-shadow:0 8px 20px rgba(16,16,24,0.06);
+  width:100%;
+  max-width:640px;
+  margin-bottom:16px;
+}
+input[type="text"]{
+  flex:1;
+  border:0;
+  outline:0;
+  font-size:16px;
+  padding:8px 12px;
+  border-radius:18px;
+  background:transparent;
+}
+button{
+  background:var(--accent);
+  color:white;
+  border:0;
+  padding:10px 14px;
+  border-radius:14px;
+  cursor:pointer;
+  font-weight:600;
+}
+button.secondary{
+  background:#fff;
+  color:var(--accent);
+  border:1px solid #e6e6e6;
+}
+button.icon{
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(16,163,127,0.12);
+  color:var(--accent);
+  border:0;
+}
+
+/* Controls row */
+.controls-row{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:16px;
+}
+.voice-select{
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid #ddd;
+  background:#fff;
+}
+
+/* Result box */
+.result{
+  width:100%;
+  max-width:980px;
+  background:var(--card);
+  border-radius:12px;
+  padding:16px;
+  box-shadow:0 10px 30px rgba(16,16,24,0.06);
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+}
+.thumb{
+  width:220px;
+  flex-shrink:0;
+}
+.thumb img{ width:100%; height:auto; border-radius:8px; display:block; }
+.content{ flex:1; }
+.title{ font-size:20px; font-weight:700; margin-bottom:8px; }
+.extract{ color:#222; line-height:1.6; word-spacing:6px; font-size:15px; }
+.small{ font-size:13px; color:var(--muted); margin-top:8px; }
+@media(max-width:760px){
+  .sidebar{display:none;}
+  .main{padding:16px;}
+  .thumb{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <button id="newChat">New Chat</button>
+  <button id="library">Library</button>
+  <button id="projects">Projects</button>
+</div>
+
+<div class="main">
+  <header>SaathvikChatGPT</header>
+
+  <div class="search-card">
+    <input id="q" type="text" placeholder="Ask something..." />
+    <button id="micBtn" class="icon">🎤</button>
+    <button id="searchBtn">Search</button>
+    <button id="openWiki" class="secondary">Open Wiki</button>
+    <button id="openGoogle" class="secondary">Open Google</button>
+  </div>
+
+  <div class="controls-row">
+    <select id="voiceSelect" class="voice-select">
+      <option>Loading voices...</option>
+    </select>
+    <button id="pauseBtn" class="secondary" style="display:none;">Pause</button>
+    <button id="resumeBtn" class="secondary" style="display:none;">Resume</button>
+    <label style="font-size:13px;">
+      <input id="autoOpen" type="checkbox" /> Auto-open Wiki
+    </label>
+  </div>
+
+  <div id="resultArea"></div>
+</div>
+
+<script>
+// JS logic for TTS, search, mic, math solver, wiki summary
+const qEl=document.getElementById('q');
+const searchBtn=document.getElementById('searchBtn');
+const resultArea=document.getElementById('resultArea');
+const micBtn=document.getElementById('micBtn');
+const openWikiBtn=document.getElementById('openWiki');
+const openGoogleBtn=document.getElementById('openGoogle');
+const voiceSelect=document.getElementById('voiceSelect');
+const pauseBtn=document.getElementById('pauseBtn');
+const resumeBtn=document.getElementById('resumeBtn');
+const autoOpenCheckbox=document.getElementById('autoOpen');
+
+const newChatBtn=document.getElementById('newChat');
+const libraryBtn=document.getElementById('library');
+const projectsBtn=document.getElementById('projects');
+
+let voices=[],currentUtterance=null,isSpeaking=false;
+
+function loadVoices(){
+  voices=window.speechSynthesis.getVoices()||[];
+  voiceSelect.innerHTML='';
+  let selectedIndex=0;
+  voices.forEach((v,i)=>{
+    const option=document.createElement('option');
+    option.value=i;
+    option.textContent=`${v.name} (${v.lang})`;
+    voiceSelect.appendChild(option);
+    const name=(v.name||'').toLowerCase();
+    if(name.includes('natasha')||name.includes('en-au')||name.includes('australia')){
+      selectedIndex=i;
+    }
+  });
+  voiceSelect.selectedIndex=selectedIndex;
+}
+window.speechSynthesis.onvoiceschanged=loadVoices;
+loadVoices();
+
+function preprocessTextForTTS(text){
+  if(!text)return text;
+  let s=text.replace(/\s+/g,' ').trim();
+  s=s.replace(/, /g,", ").replace(/\.\s+/g,".   ").replace(/\?+/g,"?   ").replace(/!+/g,"!   ").replace(/:\s+/g,":   ").replace(/;\s+/g,";   ");
+  if(!/[.?!]\s*$/.test(s)) s+=".";
+  return s;
+}
+function speakText(text){
+  if(!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const processed=preprocessTextForTTS(text);
+  const utter=new SpeechSynthesisUtterance(processed);
+  const idx=parseInt(voiceSelect.value||0,10);
+  if(voices[idx]) utter.voice=voices[idx];
+  utter.rate=1; utter.pitch=1;
+  utter.onstart=()=>{isSpeaking=true; pauseBtn.style.display='inline-block'; resumeBtn.style.display='none';};
+  utter.onend=()=>{isSpeaking=false; pauseBtn.style.display='none'; resumeBtn.style.display='none';};
+  currentUtterance=utter;
+  window.speechSynthesis.speak(utter);
+}
+pauseBtn.addEventListener('click',()=>{window.speechSynthesis.pause(); pauseBtn.style.display='none'; resumeBtn.style.display='inline-block';});
+resumeBtn.addEventListener('click',()=>{window.speechSynthesis.resume(); resumeBtn.style.display='none'; pauseBtn.style.display='inline-block';});
+
+function tryMathSolve(query){
+  if(!query)return null;
+  const q=query.trim();
+  try{const r=math.evaluate(q); if(r!==undefined)return {kind:'math',answer:String(r)};}catch(e){}
+  if(/^[0-9+\-*/().\s^%]+$/.test(q)){const s=q.replace(/\^/g,'**').replace(/%/g,'/100'); try{const r=Function('"use strict";return('+s+')')(); if(typeof r==='number'&&isFinite(r)) return {kind:'math',answer:String(r)};}catch(e){}}
+  return null;
+}
+async function fetchWikiSummary(title){
+  const encoded=encodeURIComponent(title);
+  try{
+    const resp=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,{headers:{'Accept':'application/json'}});
+    if(!resp.ok) return null;
+    const data=await resp.json();
+    const image=data.thumbnail&&data.thumbnail.source?data.thumbnail.source:null;
+    return {title:data.title||title, extract:data.extract||'', image};
+  }catch(e){return null;}
+}
+
+let lastResult=null;
+function renderResult(data){
+  lastResult=data;
+  const imgHtml=data.image?`<div class="thumb"><img src="${data.image}" alt="${data.title||'image'}"/></div>`:'';
+  const titleHtml=data.title?`<div class="title">${data.title}</div>`:'';
+  const extractHtml=data.extract?`<div class="extract">${data.extract}</div>`:`<div class="small">No summary available.</div>`;
+  resultArea.innerHTML=`<div class="result">${imgHtml}<div class="content">${titleHtml}${extractHtml}<div class="small">Source: ${data.source||'wiki'}</div></div></div>`;
+}
+function clearResult(){resultArea.innerHTML=''; lastResult=null;}
+
+async function doSearch(){
+  const q=qEl.value.trim(); if(!q)return;
+  const math=tryMathSolve(q);
+  if(math){const data={title:'Math Result',extract:`${q} = ${math.answer}`,image:null,source:'math'}; renderResult(data); speakText(`${q} equals ${math.answer}`); return;}
+  resultArea.innerHTML='<div class="small">Searching Wikipedia…</div>';
+  const wiki=await fetchWikiSummary(q);
+  if(wiki&&(wiki.extract||wiki.image)){const out={title:wiki.title,extract:wiki.extract,image:wiki.image,source:'wikipedia'}; renderResult(out); if(wiki.extract)speakText(wiki.extract); else speakText('Found an entry: '+(wiki.title||q)); return;}
+  else{clearResult(); if(autoOpenCheckbox.checked)window.open(`https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(q)}`,'_blank'); else resultArea.innerHTML='<div class="small">No direct Wikipedia summary found.</div>';}
+}
+
+// Mic
+let recognizer=null;
+micBtn.addEventListener('click',()=>{
+  if(!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)){alert('Speech Recognition not supported.'); return;}
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognizer = new SR();
+  recognizer.lang='en-IN';
+  recognizer.interimResults=false;
+  recognizer.maxAlternatives=1;
+  recognizer.start();
+  micBtn.textContent='🎙️';
+  recognizer.onresult=(e)=>{ const text=e.results[0][0].transcript; qEl.value=text; doSearch(); };
+  recognizer.onend=()=>{ micBtn.textContent='🎤'; };
+  recognizer.onerror=(ev)=>{ console.error(ev); micBtn.textContent='🎤'; };
+});
+
+openWikiBtn.addEventListener('click',()=>{ const q=qEl.value.trim(); if(!q){if(lastResult&&lastResult.title)window.open(`https://en.wikipedia.org/wiki/${encodeURIComponent(lastResult.title)}`,'_blank'); return;} window.open(`https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(q)}`,'_blank'); });
+openGoogleBtn.addEventListener('click',()=>{ const q=qEl.value.trim(); if(!q){if(lastResult&&lastResult.title)window.open(`https://www.google.com/search?q=${encodeURIComponent(lastResult.title)}`,'_blank'); return;} window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`,'_blank'); });
+
+qEl.addEventListener('keypress',(e)=>{if(e.key==='Enter')doSearch();});
+
+// Sidebar buttons
+newChatBtn.addEventListener('click',()=>{ qEl.value=''; clearResult(); window.speechSynthesis.cancel(); });
+libraryBtn.addEventListener('click',()=>{ alert('Library feature coming soon!'); });
+projectsBtn.addEventListener('click',()=>{ alert('Projects feature coming soon!'); });
+
+</script>
+</body>
+</html>
